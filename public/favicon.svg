@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="16" fill="#0F172A"/>
+  <!-- Top Face Isometric projection -->
+  <polygon points="32,8 54,20 32,32 10,20" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <!-- Left Face -->
+  <polygon points="10,20 32,32 32,56 10,44" fill="#009B48" stroke="#0F172A" stroke-width="2"/>
+  <!-- Right Face -->
+  <polygon points="32,32 54,20 54,44 32,56" fill="#B71234" stroke="#0F172A" stroke-width="2"/>
+  <!-- Inner grid lines -->
+  <line x1="21" y1="14" x2="43" y2="26" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="43" y1="14" x2="21" y2="26" stroke="#0F172A" stroke-width="1.5"/>
+  <line x1="32" y1="32" x2="32" y2="56" stroke="#0F172A" stroke-width="1.5"/>
+</svg>

@@ -1,0 +1,17 @@
+{
+  "name": "Cube Solve 4 Ai",
+  "short_name": "CubeSolve",
+  "description": "Interactive 3D Rubik's Cube Solver, Camera Scanner, WCA Timer & Learning Academy",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#030712",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
