@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { CubeState, COLOR_HEX } from '../../core/cube/CubeState';
 
@@ -18,71 +18,77 @@ export const MiniCube3D: React.FC<MiniCube3DProps> = ({
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cubiesRef = useRef<THREE.Mesh[]>([]);
   const animRef = useRef<number | null>(null);
+  const [webGlFailed, setWebGlFailed] = useState(false);
 
   useEffect(() => {
     if (!mountRef.current) return;
     const mount = mountRef.current;
 
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+    try {
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(4.2, 3.8, 5.0);
-    camera.lookAt(0, 0, 0);
+      const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+      camera.position.set(4.2, 3.8, 5.0);
+      camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(size, size);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    mount.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(size, size);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      mount.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
-    scene.add(ambientLight);
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+      scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
-    dirLight.position.set(5, 8, 6);
-    scene.add(dirLight);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.6);
+      dirLight.position.set(5, 8, 6);
+      scene.add(dirLight);
 
-    const geom = new THREE.BoxGeometry(0.92, 0.92, 0.92);
-    const blackMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.6 });
+      const geom = new THREE.BoxGeometry(0.92, 0.92, 0.92);
+      const blackMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.6 });
 
-    const cubies: THREE.Mesh[] = [];
-    for (let x = -1; x <= 1; x++) {
-      for (let y = -1; y <= 1; y++) {
-        for (let z = -1; z <= 1; z++) {
-          const materials = Array(6).fill(blackMat);
-          const mesh = new THREE.Mesh(geom, materials);
-          mesh.position.set(x, y, z);
-          mesh.userData = { x, y, z };
-          scene.add(mesh);
-          cubies.push(mesh);
+      const cubies: THREE.Mesh[] = [];
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            const materials = Array(6).fill(blackMat);
+            const mesh = new THREE.Mesh(geom, materials);
+            mesh.position.set(x, y, z);
+            mesh.userData = { x, y, z };
+            scene.add(mesh);
+            cubies.push(mesh);
+          }
         }
       }
+      cubiesRef.current = cubies;
+
+      const animate = () => {
+        animRef.current = requestAnimationFrame(animate);
+        if (autoRotate && scene) {
+          scene.rotation.y += 0.012;
+        }
+        renderer.render(scene, camera);
+      };
+      animate();
+
+      return () => {
+        if (animRef.current) cancelAnimationFrame(animRef.current);
+        renderer.dispose();
+        if (mount.contains(renderer.domElement)) {
+          mount.removeChild(renderer.domElement);
+        }
+        cubiesRef.current = [];
+      };
+    } catch (e) {
+      console.warn('MiniCube3D WebGL fallback triggered:', e);
+      setWebGlFailed(true);
     }
-    cubiesRef.current = cubies;
-
-    const animate = () => {
-      animRef.current = requestAnimationFrame(animate);
-      if (autoRotate && scene) {
-        scene.rotation.y += 0.012;
-      }
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      renderer.dispose();
-      if (mount.contains(renderer.domElement)) {
-        mount.removeChild(renderer.domElement);
-      }
-      cubiesRef.current = [];
-    };
   }, [size, autoRotate]);
 
   // Update sticker colors
   useEffect(() => {
-    if (cubiesRef.current.length === 0) return;
+    if (webGlFailed || cubiesRef.current.length === 0) return;
 
     for (const mesh of cubiesRef.current) {
       const { x, y, z } = mesh.userData;
@@ -124,7 +130,24 @@ export const MiniCube3D: React.FC<MiniCube3DProps> = ({
 
       mesh.material = materials;
     }
-  }, [cube]);
+  }, [cube, webGlFailed]);
+
+  if (webGlFailed) {
+    // 2D SVG preview fallback
+    return (
+      <div style={{ width: size, height: size }} className="flex items-center justify-center p-2">
+        <div className="grid grid-cols-3 gap-0.5 p-1 bg-gray-950 rounded-lg">
+          {cube.F.map((c, i) => (
+            <div
+              key={i}
+              style={{ backgroundColor: COLOR_HEX[c] }}
+              className="w-5 h-5 rounded-sm"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

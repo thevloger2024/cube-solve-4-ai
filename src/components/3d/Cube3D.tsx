@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CubeState, FaceName, ColorName, COLOR_HEX } from '../../core/cube/CubeState';
+import { Cube2DNet } from './Cube2DNet';
 import { RotateCw, ZoomIn, ZoomOut, Maximize2, RefreshCw } from 'lucide-react';
 
 interface Cube3DProps {
@@ -84,6 +85,7 @@ export const Cube3D: React.FC<Cube3DProps> = ({
   const cubiesRef = useRef<THREE.Mesh[]>([]);
   const animFrameRef = useRef<number | null>(null);
   const [isRotating, setIsRotating] = useState(autoRotate);
+  const [webGlFailed, setWebGlFailed] = useState(false);
 
   const CUBIE_SIZE = 0.94;
   const SPACING = 1.0;
@@ -212,100 +214,112 @@ export const Cube3D: React.FC<Cube3DProps> = ({
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    const width = container.clientWidth || 360;
+    const height = container.clientHeight || 360;
 
-    // Scene
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+    let renderer: THREE.WebGLRenderer | null = null;
+    let handleResize: (() => void) | null = null;
 
-    // Camera
-    const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
-    camera.position.set(4.5, 4.0, 5.5);
-    cameraRef.current = camera;
+    try {
+      // Scene
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+      // Camera
+      const camera = new THREE.PerspectiveCamera(36, width / height, 0.1, 100);
+      camera.position.set(4.5, 4.0, 5.5);
+      cameraRef.current = camera;
 
-    // Controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.minDistance = 4;
-    controls.maxDistance = 14;
-    controls.enablePan = false;
-    controlsRef.current = controls;
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.shadowMap.enabled = true;
+      container.appendChild(renderer.domElement);
+      rendererRef.current = renderer;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
-    scene.add(ambientLight);
+      // Controls
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 4;
+      controls.maxDistance = 14;
+      controls.enablePan = false;
+      controlsRef.current = controls;
 
-    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
-    dirLight1.position.set(6, 10, 8);
-    scene.add(dirLight1);
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 1.3);
+      scene.add(ambientLight);
 
-    const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.1);
-    dirLight2.position.set(-8, -6, -6);
-    scene.add(dirLight2);
+      const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.8);
+      dirLight1.position.set(6, 10, 8);
+      scene.add(dirLight1);
 
-    const dirLight3 = new THREE.DirectionalLight(0xffffff, 0.7);
-    dirLight3.position.set(0, -8, 8);
-    scene.add(dirLight3);
+      const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.1);
+      dirLight2.position.set(-8, -6, -6);
+      scene.add(dirLight2);
 
-    // Build the 27 cubie meshes
-    const cubies: THREE.Mesh[] = [];
-    const geom = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
+      const dirLight3 = new THREE.DirectionalLight(0xffffff, 0.7);
+      dirLight3.position.set(0, -8, 8);
+      scene.add(dirLight3);
 
-    for (let x = -1; x <= 1; x++) {
-      for (let y = -1; y <= 1; y++) {
-        for (let z = -1; z <= 1; z++) {
-          const materials: THREE.MeshStandardMaterial[] = Array(6)
-            .fill(null)
-            .map(() => getMaterial('#18181b', 0.8, 0.1));
+      // Build the 27 cubie meshes
+      const cubies: THREE.Mesh[] = [];
+      const geom = new THREE.BoxGeometry(CUBIE_SIZE, CUBIE_SIZE, CUBIE_SIZE);
 
-          const cubie = new THREE.Mesh(geom, materials);
-          cubie.position.set(x * SPACING, y * SPACING, z * SPACING);
-          cubie.userData = { x, y, z };
-          scene.add(cubie);
-          cubies.push(cubie);
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            const materials: THREE.MeshStandardMaterial[] = Array(6)
+              .fill(null)
+              .map(() => getMaterial('#18181b', 0.8, 0.1));
+
+            const cubie = new THREE.Mesh(geom, materials);
+            cubie.position.set(x * SPACING, y * SPACING, z * SPACING);
+            cubie.userData = { x, y, z };
+            scene.add(cubie);
+            cubies.push(cubie);
+          }
         }
       }
+      cubiesRef.current = cubies;
+
+      // Animation Loop
+      const animate = () => {
+        animFrameRef.current = requestAnimationFrame(animate);
+        if (isRotating && controlsRef.current) {
+          scene.rotation.y += 0.006;
+        }
+        controls.update();
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
+      };
+      animate();
+
+      // Handle Window Resize
+      handleResize = () => {
+        if (!container || !renderer || !camera) return;
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      };
+      window.addEventListener('resize', handleResize);
+    } catch (err) {
+      console.warn('Cube3D WebGL initialization failed, switching to 2D net:', err);
+      setWebGlFailed(true);
     }
-    cubiesRef.current = cubies;
-
-    // Animation Loop
-    const animate = () => {
-      animFrameRef.current = requestAnimationFrame(animate);
-      if (isRotating && controlsRef.current) {
-        scene.rotation.y += 0.006;
-      }
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    // Handle Window Resize
-    const handleResize = () => {
-      if (!container || !renderer || !camera) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
 
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      window.removeEventListener('resize', handleResize);
-      renderer.dispose();
-      if (container.contains(renderer.domElement)) {
-        container.removeChild(renderer.domElement);
+      if (handleResize) window.removeEventListener('resize', handleResize);
+      if (renderer) {
+        renderer.dispose();
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
       }
       cubiesRef.current = [];
     };
@@ -351,6 +365,21 @@ export const Cube3D: React.FC<Cube3DProps> = ({
       controlsRef.current.update();
     }
   };
+
+  if (webGlFailed) {
+    return (
+      <div className={`flex flex-col items-center justify-center p-4 rounded-2xl bg-gray-900 border border-gray-800 ${className}`}>
+        <div className="text-xs text-gray-400 mb-2 font-medium">2D Compatibility Mode Active</div>
+        <Cube2DNet
+          cube={cube}
+          interactive={interactive}
+          selectedSticker={selectedSticker}
+          highlightedStickers={highlightedStickers}
+          onStickerClick={onStickerClick}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={`relative flex items-center justify-center select-none overflow-hidden rounded-2xl bg-gradient-to-b from-gray-950 via-gray-900 to-gray-950 border border-gray-800/80 shadow-2xl ${className}`}>
